@@ -3,6 +3,59 @@ import { z } from 'zod';
 import { listAllModules, searchModules, getModule, getVersions } from './registry.js';
 import { generateScaffold } from './scaffold.js';
 
+const SCAN_SERVICE_URL = process.env.SCAN_SERVICE_URL ?? 'https://arc-iac-scan-service-173261605830.us-central1.run.app';
+
+interface ScanFinding { severity: string; rule_id: string; description: string; }
+interface ScanResult { tfsec: ScanFinding[]; tfsec_passed: ScanFinding[]; checkov: ScanFinding[]; }
+
+async function scanHcl(hcl: string): Promise<ScanResult> {
+  const res = await fetch(`${SCAN_SERVICE_URL}/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hcl }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`Scan service ${res.status}`);
+  return res.json() as Promise<ScanResult>;
+}
+
+function formatScanResult(result: ScanResult, hclLabel = 'HCL'): string {
+  const findings = result.tfsec ?? [];
+  const passed = result.tfsec_passed ?? [];
+  const bySeverity = (sev: string) => findings.filter(f => f.severity?.toUpperCase() === sev);
+  const critical = bySeverity('CRITICAL');
+  const high = bySeverity('HIGH');
+  const medium = bySeverity('MEDIUM');
+  const low = bySeverity('LOW');
+
+  const total = findings.length + passed.length;
+  const score = total > 0 ? Math.round((passed.length / total) * 100) : 100;
+
+  const lines: string[] = [
+    `## Security Scan — ${hclLabel}`,
+    `**Score: ${score}/100** | ✅ ${passed.length} passed | ❌ ${findings.length} failed`,
+    '',
+  ];
+
+  const addGroup = (label: string, items: ScanFinding[]) => {
+    if (items.length === 0) return;
+    lines.push(`### ${label} (${items.length})`);
+    items.forEach(f => lines.push(`- **${f.rule_id}**: ${f.description}`));
+    lines.push('');
+  };
+
+  if (findings.length === 0) {
+    lines.push('🎉 No security issues found.');
+  } else {
+    addGroup('🔴 CRITICAL', critical);
+    addGroup('🟠 HIGH', high);
+    addGroup('🟡 MEDIUM', medium);
+    addGroup('🔵 LOW', low);
+  }
+
+  return lines.join('\n');
+}
+
 type Content = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
 function ok(data: unknown): Content {
@@ -170,6 +223,38 @@ export function registerTools(server: McpServer): void {
       try {
         const mod = await getModule(name);
         return ok(generateScaffold(mod, instance_name ?? 'this'));
+      } catch (e) { return err(e); }
+    }
+  );
+
+  server.tool(
+    'arc_scan_hcl',
+    'Run a static security scan (tfsec) on any Terraform/HCL code. Returns findings grouped by severity (CRITICAL/HIGH/MEDIUM/LOW), passed checks, and an overall security score out of 100. Use this to validate infrastructure code before deployment.',
+    {
+      hcl: z.string().describe('Terraform/HCL code to scan. Can be a full main.tf, a single resource block, or a generated module scaffold.'),
+    },
+    async ({ hcl }) => {
+      try {
+        const result = await scanHcl(hcl);
+        return ok(formatScanResult(result, 'provided HCL'));
+      } catch (e) { return err(e); }
+    }
+  );
+
+  server.tool(
+    'arc_validate_module',
+    'Scaffold an ARC module and immediately run a security scan on it — in one step. Returns the generated HCL scaffold plus a full security report. Use this to validate a module configuration before using it in production.',
+    {
+      name: z.string().describe('Module short name e.g. arc-eks, arc-network, arc-s3'),
+      instance_name: z.string().optional().describe('Logical instance name for the module block. Defaults to "this"'),
+    },
+    async ({ name, instance_name }) => {
+      try {
+        const mod = await getModule(name);
+        const hcl = generateScaffold(mod, instance_name ?? 'this');
+        const result = await scanHcl(hcl);
+        const report = formatScanResult(result, `arc-${name} scaffold`);
+        return ok(`${hcl}\n\n---\n\n${report}`);
       } catch (e) { return err(e); }
     }
   );
