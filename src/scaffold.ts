@@ -15,7 +15,7 @@ function inputLine(input: Input): string {
 }
 
 export function generateScaffold(mod: ModuleDetail, instanceName = 'this'): string {
-  const latest = mod.versions?.[0] ?? mod.version;
+  const latest = mod.version; // mod.version is always latest from the Registry detail endpoint
   const inputs = mod.root?.inputs ?? [];
   const required = inputs.filter((i) => i.required);
   const optional = inputs.filter((i) => !i.required);
