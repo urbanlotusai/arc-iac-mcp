@@ -1,8 +1,5 @@
 {
   "version": 2,
   "builds": [{ "src": "dist/index.js", "use": "@vercel/node" }],
-  "routes": [{ "src": "/(.*)", "dest": "dist/index.js" }],
-  "env": {
-    "PORT": "3000"
-  }
+  "routes": [{ "src": "/(.*)", "dest": "dist/index.js" }]
 }

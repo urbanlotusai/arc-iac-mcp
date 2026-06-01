@@ -1,19 +1,8 @@
 # ARC IaC MCP Server
 
-A Model Context Protocol (MCP) server that gives AI assistants direct access to [SourceFuse ARC](https://registry.terraform.io/namespaces/sourcefuse) Terraform modules. Browse, search, scaffold, compare, and security-scan any of the 58+ ARC modules — all from a natural language conversation.
+A [Model Context Protocol](https://modelcontextprotocol.io) server that gives AI assistants direct access to [SourceFuse ARC](https://registry.terraform.io/namespaces/sourcefuse) Terraform modules. Browse, search, scaffold, compare, and security-scan any of the 56 ARC modules — all from natural language.
 
-**Live endpoint:** `https://mcp-theta-silk.vercel.app/mcp`  
-**Source:** `github.com/urbanlotusai/arc-iac-mcp`
-
----
-
-## What It Does
-
-Instead of manually browsing the Terraform Registry, opening GitHub tabs, and hand-writing module blocks, you can ask your AI assistant:
-
-> *"Scaffold an arc-eks module called production and check it for security issues"*
-
-The assistant calls the right tools, gets the correct version from the Registry, generates the HCL, runs tfsec against it, and returns the scaffold with a security report — all in one response.
+**Live endpoint:** `https://mcp-theta-silk.vercel.app/mcp`
 
 ---
 
@@ -33,7 +22,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop. The server appears under the tools (⚙) panel.
+Restart Claude Desktop.
 
 ### Claude Code CLI
 
@@ -41,7 +30,7 @@ Restart Claude Desktop. The server appears under the tools (⚙) panel.
 claude mcp add arc-iac --transport http https://mcp-theta-silk.vercel.app/mcp
 ```
 
-Or add it to your project's `.mcp.json`:
+Or add to your project's `.mcp.json`:
 
 ```json
 {
@@ -56,7 +45,7 @@ Or add it to your project's `.mcp.json`:
 
 ### Kiro
 
-**User-level** (`~/.kiro/settings/mcp.json`) — applies to all your projects:
+**User-level** (`~/.kiro/settings/mcp.json`):
 
 ```json
 {
@@ -70,7 +59,7 @@ Or add it to your project's `.mcp.json`:
 }
 ```
 
-**Project-level** (`.kiro/settings/mcp.json` in your repo) — shared with your team automatically:
+**Project-level** (`.kiro/settings/mcp.json` in your repo — shared with team automatically):
 
 ```json
 {
@@ -82,8 +71,6 @@ Or add it to your project's `.mcp.json`:
   }
 }
 ```
-
-Open via `Cmd+Shift+P` → **MCP Configuration**.
 
 ### Cursor / Windsurf
 
@@ -103,27 +90,19 @@ Open via `Cmd+Shift+P` → **MCP Configuration**.
 
 ## Tools Reference
 
-All tools use the module's **short name** (e.g. `arc-eks`, not `terraform-aws-arc-eks`).
+All tools use the module **short name** (e.g. `arc-eks`, not `terraform-aws-arc-eks`).
 
 ---
 
 ### `arc_list_modules`
 
-Lists all 58 SourceFuse ARC modules with name, description, download count, and latest version.
+Lists all 56 SourceFuse ARC modules with name, description, download count, and latest version.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `sort` | `"downloads" \| "name"` | No | Sort order. Omit for default Registry order. |
 
 **Example prompt:** *"List all ARC modules sorted by downloads"*
-
-**Sample output:**
-```json
-[
-  { "name": "arc-tags", "description": "Resource tagging", "downloads": 115318, "version": "1.1.1" },
-  { "name": "arc-db", "description": "RDS Aurora/Proxy — HA database", "downloads": 8793, "version": "2.0.3" }
-]
-```
 
 ---
 
@@ -141,11 +120,12 @@ Full-text search across module names and descriptions.
 
 ### `arc_get_module`
 
-Full detail for one module: all inputs, outputs, AWS resources it creates, README, and version list.
+Full detail for one module: all inputs, outputs, AWS resources it creates, and version list. README is excluded by default to keep response size manageable.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `name` | `string` | Yes | Module short name e.g. `arc-eks` |
+| `include_readme` | `boolean` | No | Include the full README text. Defaults to `false`. |
 
 **Example prompt:** *"Show me full details for arc-network"*
 
@@ -160,14 +140,6 @@ Returns only the input variables for a module. Each input includes `name`, `type
 | `name` | `string` | Yes | Module short name |
 
 **Example prompt:** *"What inputs does arc-eks require?"*
-
-**Sample output:**
-```json
-[
-  { "name": "vpc_config", "type": "object", "description": "VPC configuration", "default": null, "required": true },
-  { "name": "kubernetes_version", "type": "string", "description": "K8s version", "default": "1.29", "required": false }
-]
-```
 
 ---
 
@@ -193,15 +165,6 @@ Lists the Terraform resources (AWS and other providers) that a module creates.
 
 **Example prompt:** *"What AWS resources does arc-network create?"*
 
-**Sample output:**
-```json
-[
-  { "type": "aws_vpc", "name": "main" },
-  { "type": "aws_subnet", "name": "private" },
-  { "type": "aws_nat_gateway", "name": "this" }
-]
-```
-
 ---
 
 ### `arc_get_versions`
@@ -214,14 +177,6 @@ Lists all released versions of a module. The first item is always the latest.
 
 **Example prompt:** *"What versions of arc-eks are available?"*
 
-**Sample output:**
-```json
-[
-  { "version": "6.0.2", "latest": true },
-  { "version": "6.0.1", "latest": false }
-]
-```
-
 ---
 
 ### `arc_find_by_resource`
@@ -232,7 +187,7 @@ Scans the entire ARC catalog and returns all modules that provision a specific A
 |-----------|------|----------|-------------|
 | `resource` | `string` | Yes | Terraform resource type e.g. `aws_eks_cluster`, `aws_s3_bucket` |
 
-> **Note:** This tool fetches all 58 modules in parallel and may take 10–20 seconds on first run.
+> This tool fetches all 56 modules in parallel and may take 10–20 seconds.
 
 **Example prompt:** *"Which ARC modules create an aws_s3_bucket?"*
 
@@ -240,7 +195,7 @@ Scans the entire ARC catalog and returns all modules that provision a specific A
 
 ### `arc_compare_modules`
 
-Side-by-side diff of two modules. Shows which inputs, outputs, and AWS resources each has — and which are shared vs unique.
+Side-by-side diff of two modules showing which inputs, outputs, and AWS resources each has — and what they share or differ on.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -249,47 +204,59 @@ Side-by-side diff of two modules. Shows which inputs, outputs, and AWS resources
 
 **Example prompt:** *"Compare arc-eks and arc-ecs"*
 
-**Sample output:**
-```json
-{
-  "module_a": { "name": "arc-eks", "version": "6.0.2", "downloads": 4283 },
-  "module_b": { "name": "arc-ecs", "version": "2.0.1", "downloads": 890 },
-  "resources": {
-    "aws_eks_cluster":  { "in_a": true,  "in_b": false },
-    "aws_ecs_cluster":  { "in_a": false, "in_b": true  },
-    "aws_iam_role":     { "in_a": true,  "in_b": true  }
-  },
-  "inputs": { ... },
-  "outputs": { ... }
-}
-```
-
 ---
 
 ### `arc_scaffold`
 
-Generates a ready-to-paste HCL `module` block. Required inputs are uncommented with a `# REQUIRED` marker. Optional inputs are commented out with their default values shown.
+Generates a production-ready, multi-file Terraform module structure. The scaffold:
+
+- **Auto-detects supporting ARC modules** — if the target module needs a VPC, KMS key, or tags, the corresponding `arc-network`, `arc-kms`, or `arc-tags` module blocks are included automatically.
+- **Wires cross-references** — required inputs like `vpc_id`, `subnet_ids`, `db_subnet_group_data`, and `kms_data` are set to `module.network.*` / `module.kms.*` expressions rather than empty strings.
+- **Outputs 4 separate files** — `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `name` | `string` | Yes | Module short name |
-| `instance_name` | `string` | No | Logical name for the block e.g. `main`, `production`. Defaults to `this`. |
+| `instance_name` | `string` | No | Logical name for the module block. Defaults to `this`. |
 
-**Example prompt:** *"Scaffold an arc-network module called production"*
+**Example prompt:** *"Scaffold arc-db called aurora\_postgres"*
 
-**Sample output:**
-```hcl
-module "production" {
+**Sample output structure:**
+
+```
+### main.tf
+# ── Supporting ARC Modules ──────────────────────────────
+module "network" {
   source  = "sourcefuse/arc-network/aws"
-  version = "6.0.11"
+  version = "3.0.11"
+  environment = var.environment
+  ...
+}
 
-  # --- required inputs ---
-  namespace = "" # REQUIRED — string
-  vpc_cidr  = "" # REQUIRED — string
+# ── Main Module ─────────────────────────────────────────
+module "aurora_postgres" {
+  source  = "sourcefuse/arc-db/aws"
+  version = "4.0.2"
+  vpc_id               = module.network.vpc_id
+  db_subnet_group_data = { subnet_ids = module.network.private_subnet_ids }
+  ...
+}
 
-  # --- optional inputs (uncomment to override defaults) ---
-  # availability_zones     = "[]"   # optional — list(string)
-  # enable_nat_gateway     = "true" # optional — bool
+### variables.tf
+variable "environment" { ... }
+variable "name"        { ... }
+...
+
+### outputs.tf
+output "aurora_postgres_endpoint" { value = module.aurora_postgres.endpoint }
+...
+
+### versions.tf
+terraform {
+  required_version = ">= 1.3.0"
+  required_providers {
+    aws = { source = "hashicorp/aws", version = ">= 5.0" }
+  }
 }
 ```
 
@@ -297,15 +264,13 @@ module "production" {
 
 ### `arc_scan_hcl`
 
-Runs a static security scan (powered by [tfsec](https://github.com/aquasecurity/tfsec)) on any Terraform/HCL code. Returns findings grouped by severity with rule IDs, descriptions, and an overall security score out of 100.
+Runs a static security scan ([tfsec](https://github.com/aquasecurity/tfsec)) on any Terraform/HCL code. Returns findings grouped by severity (CRITICAL / HIGH / MEDIUM / LOW) and an overall security score out of 100.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `hcl` | `string` | Yes | Terraform/HCL code to scan |
 
-> **Note:** The scan service may take up to 60 seconds on first call after a period of inactivity (cold start on Cloud Run).
-
-**Example prompt:** *"Scan this HCL for security issues: `resource "aws_s3_bucket" "data" { bucket = "my-bucket" }`"*
+**Example prompt:** *"Scan this Terraform before I raise a PR: `<paste HCL>`"*
 
 **Sample output:**
 ```
@@ -320,22 +285,22 @@ Runs a static security scan (powered by [tfsec](https://github.com/aquasecurity/
 
 ### `arc_validate_module`
 
-Combines `arc_scaffold` and `arc_scan_hcl` in a single call — generates the HCL scaffold and immediately runs a security scan against it. The most efficient way to assess a module before adopting it.
+Combines `arc_scaffold` + `arc_scan_hcl` in one call. Generates the full multi-file scaffold and immediately runs a security scan against it.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `name` | `string` | Yes | Module short name |
 | `instance_name` | `string` | No | Logical instance name. Defaults to `this`. |
 
-**Example prompt:** *"Validate arc-security-group for me"*
+**Example prompt:** *"Validate arc-eks for me"*
 
-**Returns:** The full HCL scaffold followed by the security report.
+**Returns:** The full scaffold (4 files) followed by the tfsec security report.
 
 ---
 
 ## MCP Resource
 
-In addition to tools, the server exposes one MCP resource that AI clients can read as background context.
+The server exposes one MCP resource AI clients can read as background context.
 
 | URI | MIME | Description |
 |-----|------|-------------|
@@ -345,66 +310,66 @@ In addition to tools, the server exposes one MCP resource that AI clients can re
 
 ## Example Workflows
 
-### Scaffold a full EKS stack
+### Scaffold a full Aurora PostgreSQL stack with RDS Proxy
 
 ```
-"Give me scaffolds for arc-network, arc-eks, and arc-eks-addon wired together"
+"Scaffold a production-grade Aurora PostgreSQL setup with RDS Proxy using ARC modules"
 ```
 
-The assistant will call `arc_scaffold` three times, then use `arc_get_outputs` / `arc_get_inputs` to wire the outputs of one module into the inputs of the next.
+Calls `arc_scaffold` for `arc-db`. The tool auto-detects that `vpc_id` and `db_subnet_group_data` come from `arc-network`, fetches both modules from the Registry in parallel, and returns `main.tf` (with `module.network.*` cross-references), `variables.tf`, `outputs.tf`, and `versions.tf`.
 
 ---
 
 ### Find the right module for a task
 
 ```
-"I need to set up a message queue. Which ARC module should I use?"
+"I need to set up a Kafka stream pipeline. Which ARC module should I use?"
 ```
 
 Calls `arc_search_modules` with relevant keywords, returns matching modules with descriptions and download counts.
 
 ---
 
-### Security review before PR
+### Security review before a PR
 
 ```
 "Scan the following Terraform before I raise a PR: <paste HCL>"
 ```
 
-Calls `arc_scan_hcl`, returns a severity-grouped report with a score. If issues are found, you can ask the assistant to suggest fixes.
+Calls `arc_scan_hcl`, returns a severity-grouped report with score. Ask the assistant to suggest fixes for any findings.
 
 ---
 
-### Module selection decision
+### Compare container orchestration options
 
 ```
-"Compare arc-eks and arc-ecs. I need to run 10 microservices — which is better?"
+"Compare arc-eks and arc-ecs — I need to run 10 microservices. Which is better for my use case?"
 ```
 
-Calls `arc_compare_modules`, returns a structured diff. The assistant reasons over the result and makes a recommendation.
+Calls `arc_compare_modules`, returns a structured diff of inputs/outputs/resources. The assistant reasons over the result and makes a recommendation.
 
 ---
 
 ## Architecture
 
 ```
-AI Client (Claude Desktop / Claude Code / Kiro)
+AI Client (Claude Desktop / Claude Code / Kiro / Cursor)
         │
-        │  JSON-RPC over HTTPS (MCP Streamable HTTP)
+        │  JSON-RPC over HTTPS  (MCP Streamable HTTP)
         ▼
-ARC IaC MCP Server  (Node.js + Express)
-  ├── Path 1: known session     → reuse transport  (Render persistent)
-  ├── Path 2: initialize        → create session, issue mcp-session-id
-  └── Path 3: no session        → stateless bypass (Vercel serverless)
+ARC IaC MCP Server  —  Node.js + Express  —  Vercel (serverless)
+  ├── Path 1: known mcp-session-id  → reuse existing transport
+  ├── Path 2: initialize request    → create session, return session ID
+  └── Path 3: no session (default)  → stateless bypass, works on Vercel
         │
-        ├── registry.terraform.io/v1  (module metadata, inputs, outputs)
+        ├── registry.terraform.io/v1   (module metadata, inputs, outputs)
         │     namespace: sourcefuse
         │
-        └── arc-iac-scan-service  (Google Cloud Run)
+        └── arc-iac-scan-service       (Google Cloud Run)
               tfsec static analysis
 ```
 
-**Transport:** MCP Streamable HTTP with three-path session handling — supports both persistent-process deployments (Render) and serverless (Vercel).
+**Transport:** MCP Streamable HTTP with three-path session handling — works correctly on both persistent processes and Vercel serverless functions.
 
 **Data source:** All module data is fetched live from the public Terraform Registry. No database, no stale cache.
 
@@ -412,33 +377,23 @@ ARC IaC MCP Server  (Node.js + Express)
 
 ## Self-Hosting
 
-### Option A — Render (recommended for teams)
-
-The repo includes `render.yaml`. Connect it in the Render dashboard:
-
-1. Go to [dashboard.render.com/new/web](https://dashboard.render.com/new/web)
-2. Connect `urbanlotusai/arc-iac-mcp`
-3. Render auto-reads `render.yaml` → click **Deploy**
-
-Your endpoint: `https://arc-iac-mcp.onrender.com/mcp`
-
-### Option B — Vercel
+### Vercel (recommended)
 
 ```bash
 git clone https://github.com/urbanlotusai/arc-iac-mcp
 cd arc-iac-mcp
-npm install
-npm run build
-npx vercel deploy --prod
+npm install && npm run build
+npx vercel --prod
 ```
 
-### Option C — Any Node.js host
+Your endpoint: `https://<your-project>.vercel.app/mcp`
+
+### Any Node.js host
 
 ```bash
 git clone https://github.com/urbanlotusai/arc-iac-mcp
 cd arc-iac-mcp
-npm install
-npm run build
+npm install && npm run build
 PORT=3000 node dist/index.js
 ```
 
@@ -446,10 +401,10 @@ PORT=3000 node dist/index.js
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | *(none — stdio mode)* | Set to any port to start HTTP server mode |
+| `PORT` | *(unset — stdio mode)* | Set to start HTTP server. Not needed on Vercel. |
 | `SCAN_SERVICE_URL` | `https://arc-iac-scan-service-...run.app` | Override the tfsec scan service URL |
 
-When `PORT` is not set, the server starts in **stdio mode** for local Claude Desktop use.
+When `PORT` is unset and not running on Vercel, the server starts in **stdio mode** for local Claude Desktop use.
 
 ---
 
@@ -460,19 +415,11 @@ git clone https://github.com/urbanlotusai/arc-iac-mcp
 cd arc-iac-mcp
 npm install
 
-# Run in dev mode (no build step)
+# Dev mode — no build step needed
 PORT=3000 npm run dev
 ```
 
-Test with MCP Inspector:
-
-```bash
-npx @modelcontextprotocol/inspector node dist/index.js
-```
-
-Opens a browser UI at `http://localhost:5173` — invoke any tool and inspect the raw JSON-RPC request/response.
-
-Test via curl (no session required):
+Test via curl:
 
 ```bash
 curl -s -X POST http://localhost:3000/mcp \
@@ -484,40 +431,37 @@ curl -s -X POST http://localhost:3000/mcp \
     "method": "tools/call",
     "params": {
       "name": "arc_scaffold",
-      "arguments": { "name": "arc-eks", "instance_name": "production" }
+      "arguments": { "name": "arc-db", "instance_name": "aurora_postgres" }
     }
   }'
 ```
+
+Test with MCP Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+Opens a browser UI at `http://localhost:5173` — invoke any tool and inspect raw JSON-RPC.
 
 ---
 
 ## Troubleshooting
 
-**"Server not initialized" error**
-
-This was a known issue (fixed). Update your client config to point to the current endpoint. If self-hosting, pull the latest code — the fix is in `src/index.ts` (three-path session handler).
-
 **Tools list is empty / only resources show**
-
-The client may be sending `tools/list` before `initialize`. Ensure your MCP client version supports Streamable HTTP. Claude Desktop 1.x, Claude Code CLI, and Kiro all work.
+The client may be sending `tools/list` before `initialize`. Ensure your MCP client supports Streamable HTTP. Claude Desktop, Claude Code CLI, and Kiro all work.
 
 **`arc_find_by_resource` is slow**
+Expected — it fetches all 56 modules in parallel from the Terraform Registry. Typical time: 10–20 seconds.
 
-Expected — it fetches all 58 modules in parallel from the Terraform Registry. Typical time is 10–20 seconds depending on Registry latency.
-
-**`arc_scan_hcl` / `arc_validate_module` timeout**
-
-The tfsec scan service (Google Cloud Run) may have a cold start of 30–60 seconds after a period of inactivity. Retry once — subsequent calls are fast.
-
-**Scaffold shows wrong version**
-
-Ensure you're on the latest server version. An earlier bug used `versions[0]` (oldest) instead of `mod.version` (latest). Fixed in commit `66f4966`.
+**`arc_scan_hcl` / `arc_validate_module` timeout on first call**
+The tfsec scan service (Google Cloud Run) may cold-start in 30–60 seconds after inactivity. Retry once — subsequent calls are fast.
 
 ---
 
-## Module Naming Convention
+## Module Naming
 
-All tools accept the **short name** without the `terraform-aws-` prefix:
+All tools accept the **short name** without prefix or provider suffix:
 
 | ✅ Correct | ❌ Wrong |
 |-----------|---------|
@@ -535,18 +479,19 @@ All tools accept the **short name** without the `terraform-aws-` prefix:
 | Language | TypeScript 5 |
 | MCP SDK | `@modelcontextprotocol/sdk` v1.29 |
 | HTTP | Express 4 |
+| Validation | Zod 4 |
 | Data source | Terraform Registry API (public) |
 | Security scan | tfsec via Google Cloud Run |
-| Hosting | Vercel (live) + Render (optional) |
+| Hosting | Vercel |
 
 ---
 
 ## Contributing
 
 1. Fork `urbanlotusai/arc-iac-mcp`
-2. `npm install && npm run dev`
+2. `npm install && PORT=3000 npm run dev`
 3. Add tools in `src/tools.ts` following the existing pattern
-4. `npm run build` — must compile clean
+4. `npm run build` — must compile clean with no TypeScript errors
 5. Open a pull request
 
-All tools must handle errors gracefully (use the `err()` helper) and return `{ content: [{ type: 'text', text: '...' }] }`.
+All tools must handle errors gracefully using the `err()` helper and return `{ content: [{ type: 'text', text: '...' }] }`.

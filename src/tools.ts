@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listAllModules, searchModules, getModule, getVersions } from './registry.js';
-import { generateScaffold } from './scaffold.js';
+import { generateScaffold, formatScaffoldFiles, detectSupportingModules } from './scaffold.js';
 
 const SCAN_SERVICE_URL = process.env.SCAN_SERVICE_URL ?? 'https://arc-iac-scan-service-173261605830.us-central1.run.app';
 
@@ -97,11 +97,20 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'arc_get_module',
-    'Get full details for one SourceFuse ARC module: inputs, outputs, AWS resources, readme, and version list. Use the short name e.g. "arc-eks", "arc-network", "arc-db".',
-    { name: z.string().describe('Module short name e.g. arc-eks, arc-network') },
-    async ({ name }) => {
-      try { return ok(await getModule(name)); }
-      catch (e) { return err(e); }
+    'Get details for one SourceFuse ARC module: inputs, outputs, AWS resources, and version list. Use the short name e.g. "arc-eks", "arc-network", "arc-db". Set include_readme=true to also fetch the full README (large modules may exceed token limits).',
+    {
+      name: z.string().describe('Module short name e.g. arc-eks, arc-network'),
+      include_readme: z.boolean().optional().describe('Include the full README text. Defaults to false to keep response size manageable.'),
+    },
+    async ({ name, include_readme }) => {
+      try {
+        const mod = await getModule(name);
+        if (!include_readme && mod.root) {
+          const { readme: _readme, ...rootWithout } = mod.root;
+          return ok({ ...mod, root: rootWithout });
+        }
+        return ok(mod);
+      } catch (e) { return err(e); }
     }
   );
 
@@ -222,7 +231,19 @@ export function registerTools(server: McpServer): void {
     async ({ name, instance_name }) => {
       try {
         const mod = await getModule(name);
-        return ok(generateScaffold(mod, instance_name ?? 'this'));
+        const deps = detectSupportingModules(mod.root?.inputs ?? []);
+        const supportingMods = (
+          await Promise.all(
+            deps.map(async d => {
+              try {
+                const detail = await getModule(d.arcModule);
+                return { detail, instance: d.instance };
+              } catch { return null; }
+            })
+          )
+        ).filter((s): s is { detail: Awaited<ReturnType<typeof getModule>>; instance: string } => s !== null);
+        const files = generateScaffold(mod, instance_name ?? 'this', supportingMods);
+        return ok(formatScaffoldFiles(files));
       } catch (e) { return err(e); }
     }
   );
@@ -251,10 +272,22 @@ export function registerTools(server: McpServer): void {
     async ({ name, instance_name }) => {
       try {
         const mod = await getModule(name);
-        const hcl = generateScaffold(mod, instance_name ?? 'this');
+        const deps = detectSupportingModules(mod.root?.inputs ?? []);
+        const supportingMods = (
+          await Promise.all(
+            deps.map(async d => {
+              try {
+                const detail = await getModule(d.arcModule);
+                return { detail, instance: d.instance };
+              } catch { return null; }
+            })
+          )
+        ).filter((s): s is { detail: Awaited<ReturnType<typeof getModule>>; instance: string } => s !== null);
+        const files = generateScaffold(mod, instance_name ?? 'this', supportingMods);
+        const hcl = files['main.tf'];
         const result = await scanHcl(hcl);
         const report = formatScanResult(result, `arc-${name} scaffold`);
-        return ok(`${hcl}\n\n---\n\n${report}`);
+        return ok(`${formatScaffoldFiles(files)}\n\n---\n\n${report}`);
       } catch (e) { return err(e); }
     }
   );
