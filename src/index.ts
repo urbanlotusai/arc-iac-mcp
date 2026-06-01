@@ -38,36 +38,50 @@ if (port) {
     });
   });
 
-  // Handle MCP requests — reuse session when client sends mcp-session-id header
+  // Handle MCP requests
   app.all('/mcp', async (req, res) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
+    // Path 1: known session — reuse transport (works for persistent processes like Render)
     if (sessionId && sessions.has(sessionId)) {
-      const { transport } = sessions.get(sessionId)!;
-      await transport.handleRequest(req, res, req.body);
+      await sessions.get(sessionId)!.transport.handleRequest(req, res, req.body);
       return;
     }
 
-    // New session
+    const body = req.body as { method?: string } | Array<{ method?: string }> | undefined;
+    const isInit = Array.isArray(body)
+      ? body.some(m => m?.method === 'initialize')
+      : body?.method === 'initialize';
+
     const server = createServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport });
-      },
-    });
 
-    transport.onclose = () => {
-      for (const [id, s] of sessions.entries()) {
-        if (s.transport === transport) {
-          sessions.delete(id);
-          break;
+    if (isInit) {
+      // Path 2: initialize — create a new session, send session ID back to client
+      const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (id: string) => { sessions.set(id, { server, transport }); },
+      });
+      transport.onclose = () => {
+        for (const [id, s] of sessions.entries()) {
+          if (s.transport === transport) { sessions.delete(id); break; }
         }
-      }
-    };
-
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+      };
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } else {
+      // Path 3: stateless fallback — no session ID or session expired (common on serverless).
+      // The SDK's transport guards tool calls behind _initialized (set only after an initialize
+      // exchange). Bypass it so clients that don't maintain sessions (or hit a cold instance)
+      // can still call tools without re-initializing.
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (transport as any)._webStandardTransport._initialized = true;
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    }
   });
 
   // Allow clients to explicitly terminate their session
